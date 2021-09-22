@@ -274,6 +274,10 @@ pub enum Variant {
 /// A Universally Unique Identifier (UUID).
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
+#[cfg_attr(
+    any(test, feature = "zerocopy"),
+    derive(zerocopy::AsBytes, zerocopy::FromBytes)
+)]
 pub struct Uuid(Bytes);
 
 impl Uuid {
@@ -1153,6 +1157,40 @@ mod tests {
     fn test_as_bytes() {
         let u = test_util::new();
         let ub = u.as_bytes();
+        let ur = u.as_ref();
+
+        assert_eq!(ub.len(), 16);
+        assert_eq!(ur.len(), 16);
+        assert!(!ub.iter().all(|&b| b == 0));
+        assert!(!ur.iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    fn test_zerocopy_from_bytes() {
+        use zerocopy::LayoutVerified;
+
+        let b = [
+            0xa1, 0xa2, 0xa3, 0xa4, 0xb1, 0xb2, 0xc1, 0xc2, 0xd1, 0xd2, 0xd3,
+            0xd4, 0xd5, 0xd6, 0xd7, 0xd8,
+        ];
+
+        let u = LayoutVerified::<&[u8], Uuid>::new(&b)
+            .unwrap()
+            .into_ref()
+            .clone();
+        let expected = "a1a2a3a4b1b2c1c2d1d2d3d4d5d6d7d8";
+
+        assert_eq!(u.to_simple().to_string(), expected);
+    }
+
+    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+    fn test_zerocopy_as_bytes() {
+        use zerocopy::AsBytes;
+
+        let u = test_util::new();
+        let ub = <Uuid as AsBytes>::as_bytes(&u);
         let ur = u.as_ref();
 
         assert_eq!(ub.len(), 16);
